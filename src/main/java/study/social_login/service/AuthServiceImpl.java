@@ -26,25 +26,31 @@ public class AuthServiceImpl implements AuthService {
     // 로그인
     @Override
     public ResponseEntity<?> login(LoginRequestDto dto, HttpServletResponse response) {
+        // 사용자 이메일로 조회
+        User user = userRepository.findByEmail(dto.getEmail())
+            .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
 
-        if("testuser".equals(dto.getEmail()) && "1234".equals(dto.getPassword())) {
-
-            String accessToken = jwtTokenProvider.createAccessToken(dto.getEmail());
-            String refreshToken = jwtTokenProvider.createRefreshToken(dto.getEmail());
-
-            Cookie cookie = new Cookie("refreshToken", refreshToken);
-            cookie.setHttpOnly(true);
-            cookie.setSecure(true);
-            cookie.setPath("/");
-            cookie.setMaxAge(7 * 24 * 60 * 60);
-    
-            response.addCookie(cookie);
-
-            return ResponseEntity.ok(Collections.singletonMap("accessToken", accessToken));
-
-        } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        // 비밀번호 검증
+        if(!passwordEncoder.matches(dto.getPassword(), user.getPassword())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body("비밀번호가 일치하지 않습니다.");
         }
+
+        // JWT 토큰 생성
+        String accessToken = jwtTokenProvider.createAccessToken(user.getEmail());
+        String refreshToken = jwtTokenProvider.createRefreshToken(user.getEmail());
+
+        // 리프레시 토큰을 쿠키에 저장
+        Cookie cookie = new Cookie("refreshToken", refreshToken);
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(7 * 24 * 60 * 60); // 7일
+
+        response.addCookie(cookie);
+
+        // 응답에 액세스 토큰 반환
+        return ResponseEntity.ok(Collections.singletonMap("accessToken", accessToken));
     }
 
     // 회원가입
